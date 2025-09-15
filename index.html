@@ -108,7 +108,7 @@
             transition-duration: 0.1s;
         }
         #tooltip {
-            position: absolute;
+            position: fixed; /* Use fixed positioning */
             background-color: #1E293B; /* slate-800 */
             color: white;
             padding: 0.5rem 0.75rem;
@@ -117,9 +117,14 @@
             z-index: 100;
             pointer-events: none;
             opacity: 0;
-            transition: opacity 0.2s;
+            transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
             max-width: 220px;
             text-align: center;
+            transform: scale(0.95);
+        }
+        #tooltip.visible {
+            opacity: 1;
+            transform: scale(1);
         }
 
         @media print {
@@ -144,7 +149,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <!-- Input Form -->
             <div class="lg:col-span-1">
-                <div class="card sticky top-8">
+                <div class="card lg:sticky top-8">
                     <form id="meal-plan-form">
                         <!-- API Key Section -->
                         <div id="api-key-section" class="mb-6 pb-6 border-b border-slate-200">
@@ -287,29 +292,34 @@
         let synth;
 
         function initializeAudio() {
-            if (soundInitialized || typeof Tone === 'undefined') {
-                return;
-            }
-            try {
-                Tone.start(); 
-                synth = new Tone.Synth({
-                    oscillator: { type: 'sine' },
-                    envelope: { attack: 0.005, decay: 0.1, sustain: 0.2, release: 0.1 }
-                }).toDestination();
-                soundInitialized = true;
-            } catch (e) {
-                console.error("Could not initialize audio context:", e);
-            }
+            if (soundInitialized || typeof Tone === 'undefined') return;
+            
+            Tone.start().then(() => {
+                try {
+                    synth = new Tone.Synth({
+                        oscillator: { type: 'sine' },
+                        envelope: { attack: 0.005, decay: 0.1, sustain: 0.2, release: 0.1 }
+                    }).toDestination();
+                    soundInitialized = true;
+                    console.log('Audio context started successfully.');
+                } catch (e) {
+                    console.error("Could not initialize audio synth:", e);
+                }
+            }).catch(e => {
+                console.error("Tone.start() failed:", e);
+            });
         }
+        
+        document.body.addEventListener('click', initializeAudio, { once: true });
+        document.body.addEventListener('touchstart', initializeAudio, { once: true });
+
 
         const playTickSound = () => {
-            initializeAudio();
-            if (synth) synth.triggerAttackRelease("C5", "8n", Tone.now());
+            if (soundInitialized && synth) synth.triggerAttackRelease("C5", "8n", Tone.now());
         };
 
         const playTockSound = () => {
-            initializeAudio();
-            if (synth) synth.triggerAttackRelease("A4", "8n", Tone.now());
+            if (soundInitialized && synth) synth.triggerAttackRelease("A4", "8n", Tone.now());
         };
 
         // Event Listeners
@@ -332,23 +342,34 @@
             elementsWithTooltip.forEach(el => {
                 el.addEventListener('mouseenter', (e) => {
                     tooltip.textContent = el.dataset.tooltip;
-                    tooltip.style.opacity = '1';
+                    tooltip.classList.add('visible');
                     
                     const rect = el.getBoundingClientRect();
-                    const tooltipRect = tooltip.getBoundingClientRect();
-                    tooltip.style.left = `${rect.left + rect.width / 2 - tooltipRect.width / 2}px`;
-                    tooltip.style.top = `${rect.bottom + 8}px`; // 8px below the element
-                });
+                    let top = rect.bottom + 8;
+                    let left = rect.left + rect.width / 2;
 
-                el.addEventListener('mousemove', (e) => {
-                     const rect = el.getBoundingClientRect();
+                    // A bit of a trick to get the dimensions before it's fully rendered
+                    tooltip.style.left = '-9999px';
+                    tooltip.style.top = '-9999px';
                     const tooltipRect = tooltip.getBoundingClientRect();
-                    tooltip.style.left = `${rect.left + rect.width / 2 - tooltipRect.width / 2}px`;
-                    tooltip.style.top = `${rect.bottom + 8}px`;
+                    
+                    left -= tooltipRect.width / 2;
+
+                    // Boundary checks
+                    if (left < 8) left = 8;
+                    if (left + tooltipRect.width > window.innerWidth - 8) {
+                        left = window.innerWidth - tooltipRect.width - 8;
+                    }
+                    if (top + tooltipRect.height > window.innerHeight - 8) {
+                        top = rect.top - tooltipRect.height - 8;
+                    }
+
+                    tooltip.style.left = `${left}px`;
+                    tooltip.style.top = `${top}px`;
                 });
 
                 el.addEventListener('mouseleave', () => {
-                    tooltip.style.opacity = '0';
+                    tooltip.classList.remove('visible');
                 });
             });
         });
@@ -468,7 +489,7 @@
             - 반드시 한국어로 대답해주세요.
 
             **출력 형식:**
-            반드시 아래와 같은 JSON 형식으로만 응답해주세요. 다른 설명은 절대 추가하지 마세요.
+            당신의 응답은 반드시 JSON 형식이어야 합니다. JSON 배열 앞뒤로 어떠한 설명이나 Markdown 형식 ('''json)도 절대 추가하지 마세요. 당신의 전체 응답이 '[' 문자로 시작해서 ']' 문자로 끝나야 합니다.
             - 'day', 'breakfast', 'lunch', 'dinner' 키를 가진 객체들의 배열(Array) 형태로 출력해주세요.
             - 하루 2끼 식단일 경우, 'lunch' 값은 "—" (하이픈)으로 표시해주세요.
 
@@ -527,8 +548,14 @@
                 });
                 
                 const result = await response.json();
-                const text = result.candidates[0].content.parts[0].text;
-                const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                const rawText = result.candidates[0].content.parts[0].text;
+                
+                const jsonMatch = rawText.match(/(\[[\s\S]*\])/);
+                if (!jsonMatch) {
+                    throw new Error("AI 응답에서 유효한 식단표(JSON)를 찾을 수 없습니다.");
+                }
+                const cleanedText = jsonMatch[1];
+
                 const plan = JSON.parse(cleanedText);
                 displayPlan(plan, inputs.mealFreq, inputs.days);
 
