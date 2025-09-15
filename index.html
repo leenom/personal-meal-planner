@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leeseong's Meal Planner</title>
+    <title>Leeseong's Meal Planner (AI Ver.)</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -33,12 +34,17 @@
             width: 100%;
             border: 1px solid transparent;
         }
+        .btn:disabled {
+            background-color: #94A3B8; /* Slate 400 */
+            cursor: not-allowed;
+            box-shadow: none;
+        }
         .btn-primary {
             background-color: #2563EB; /* Blue 600 */
             color: white;
             box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
         }
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             background-color: #1D4ED8; /* Blue 700 */
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(37, 99, 235, 0.3);
@@ -48,7 +54,7 @@
             color: #0F172A; /* Slate 900 */
             border-color: #E2E8F0; /* Slate 200 */
         }
-         .btn-secondary:hover {
+         .btn-secondary:hover:not(:disabled) {
             background-color: #E2E8F0; /* Slate 200 */
             transform: translateY(-2px);
         }
@@ -57,7 +63,7 @@
             color: white;
              box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);
         }
-        .btn-tertiary:hover {
+        .btn-tertiary:hover:not(:disabled) {
             background-color: #059669; /* Emerald 600 */
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
@@ -74,12 +80,54 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        /* Custom Checkbox Style */
+        .checkbox-label {
+            display: inline-block;
+            padding: 0.5rem 1rem; /* 8px 16px */
+            border: 1px solid #CBD5E1; /* slate-300 */
+            border-radius: 9999px; /* rounded-full */
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            user-select: none;
+            font-size: 0.875rem; /* 14px */
+            color: #475569; /* slate-600 */
+        }
+        .checkbox-label:hover {
+            background-color: #F1F5F9; /* slate-100 */
+            border-color: #94A3B8; /* slate-400 */
+        }
+        input[type="checkbox"]:checked + .checkbox-label {
+            background-color: #2563EB; /* blue-600 */
+            border-color: #2563EB; /* blue-600 */
+            color: white;
+            font-weight: 500;
+        }
+        /* Click effect for checkbox */
+        .checkbox-label:active {
+            transform: scale(0.96);
+            transition-duration: 0.1s;
+        }
+        #tooltip {
+            position: absolute;
+            background-color: #1E293B; /* slate-800 */
+            color: white;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            font-size: 0.75rem; /* 12px */
+            z-index: 100;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            max-width: 220px;
+            text-align: center;
+        }
+
         @media print {
             body { background-color: white; }
             body * { visibility: hidden; }
             #plan-output, #plan-output * { visibility: visible; }
             #plan-output { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; border: 1px solid #ccc; }
-            #action-buttons { display: none; }
+            #action-buttons, .no-print { display: none; }
         }
     </style>
 </head>
@@ -88,8 +136,8 @@
     <div class="container mx-auto p-4 md:p-8 max-w-7xl">
         <!-- Header -->
         <header class="text-center mb-10">
-            <h1 class="text-4xl md:text-5xl font-bold text-slate-900 tracking-tight">Leeseong's Meal Planner</h1>
-            <p class="mt-4 text-lg text-slate-500">가족을 위한 건강한 맞춤형 식단을 만들어 보세요.</p>
+            <h1 class="text-4xl md:text-5xl font-bold text-slate-900 tracking-tight">Leeseong's Meal Planner <span class="text-2xl text-blue-600">AI Ver.</span></h1>
+            <p class="mt-4 text-lg text-slate-500">가족을 위한 건강한 맞춤형 식단을 AI가 실시간으로 생성합니다.</p>
         </header>
 
         <!-- Main Content -->
@@ -97,72 +145,90 @@
             <!-- Input Form -->
             <div class="lg:col-span-1">
                 <div class="card sticky top-8">
-                    <h2 class="flex items-center text-2xl font-bold mb-6 border-b border-slate-200 pb-4 text-slate-800">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-3 text-blue-600"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                        식단 설정
-                    </h2>
                     <form id="meal-plan-form">
+                        <!-- API Key Section -->
+                        <div id="api-key-section" class="mb-6 pb-6 border-b border-slate-200">
+                             <h2 class="flex items-center text-xl font-bold mb-4 text-slate-800 no-print">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-3 text-blue-600"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                Gemini API 설정
+                            </h2>
+                            <div id="api-key-input-area">
+                                <label for="api-key" class="block text-sm font-medium text-slate-600 mb-2 no-print">API 키 (브라우저에 자동 저장)</label>
+                                <div class="relative">
+                                    <input type="password" id="api-key" placeholder="여기에 API 키 붙여넣기" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 no-print">
+                                </div>
+                                <p class="text-xs text-slate-400 mt-2 no-print">API 키는 브라우저에만 저장되며 외부로 전송되지 않습니다. <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-500 hover:underline">여기서</a> 키를 발급받을 수 있습니다.</p>
+                            </div>
+                            <div id="api-key-status" class="hidden">
+                                <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex justify-between items-center">
+                                    <p class="text-sm text-emerald-800">✓ API 키가 안전하게 저장되었습니다.</p>
+                                    <button type="button" id="edit-api-key-btn" class="text-sm text-slate-500 hover:text-slate-800 underline font-semibold">수정</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <h2 class="flex items-center text-xl font-bold mb-4 text-slate-800">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-3 text-blue-600"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                            식단 설정
+                        </h2>
                         <div class="space-y-6">
-                            <!-- Family Composition -->
+                            <!-- Basic Info -->
                             <div>
                                 <label class="block text-md font-medium text-slate-600 mb-2">가족 구성원</label>
                                 <div class="flex items-center space-x-4">
-                                    <div class="flex items-center">
-                                        <label for="adults" class="mr-2 text-slate-500">어른</label>
-                                        <input type="number" id="adults" value="2" min="1" class="w-20 p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    </div>
-                                    <div class="flex items-center">
-                                        <label for="children" class="mr-2 text-slate-500">아이</label>
-                                        <input type="number" id="children" value="1" min="0" class="w-20 p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    </div>
+                                    <div class="flex items-center"><label for="adults" class="mr-2 text-slate-500">어른</label><input type="number" id="adults" value="2" min="1" class="w-20 p-2 border border-slate-300 rounded-lg"></div>
+                                    <div class="flex items-center"><label for="children" class="mr-2 text-slate-500">아이</label><input type="number" id="children" value="2" min="0" class="w-20 p-2 border border-slate-300 rounded-lg"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Health Goal Checkboxes -->
+                            <div>
+                                <label class="block text-md font-medium text-slate-600 mb-3">주요 목표 (중복 선택 가능)</label>
+                                <div id="health-goal-options" class="flex flex-wrap gap-2">
+                                    <div><input type="checkbox" name="health-goal" id="goal-general" value="균형 잡힌 영양" class="hidden"><label for="goal-general" class="checkbox-label" data-tooltip="가족들의 전반적인 영양균형을 맞출 수 있는 식단입니다.">균형 잡힌 영양</label></div>
+                                    <div><input type="checkbox" name="health-goal" id="goal-weight-loss" value="체중 조절" class="hidden"><label for="goal-weight-loss" class="checkbox-label" data-tooltip="가족들이 과체중에 시달리고 있다면 선택해주세요.">체중 조절</label></div>
+                                    <div><input type="checkbox" name="health-goal" id="goal-muscle-gain" value="근력 강화" class="hidden"><label for="goal-muscle-gain" class="checkbox-label" data-tooltip="누군가 운동을 시작했다면 이걸 선택 해주세요.">근력 강화</label></div>
+                                    <div><input type="checkbox" name="health-goal" id="goal-diet" value="저염/저당 식단" class="hidden"><label for="goal-diet" class="checkbox-label" data-tooltip="가족중에 아픈 사람이 있다면!">저염/저당</label></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Cuisine Preference Checkboxes -->
+                            <div>
+                                <label class="block text-md font-medium text-slate-600 mb-3">선호 음식 종류 (중복 선택 가능)</label>
+                                <div id="cuisine-pref-options" class="flex flex-wrap gap-2">
+                                    <div><input type="checkbox" name="cuisine-pref" id="cuisine-special" value="쩜오특선" class="hidden"><label for="cuisine-special" class="checkbox-label" data-tooltip="완전히 제작자의 취향입니다. 우리집 단골 메뉴가 식단에 포함됩니다.">⭐ 쩜오특선</label></div>
+                                    <div><input type="checkbox" name="cuisine-pref" id="cuisine-korean" value="한식" class="hidden"><label for="cuisine-korean" class="checkbox-label" data-tooltip="김치찌개, 불고기 등 한국인이라면 누구나 좋아하는 메뉴 위주로 구성합니다.">한식</label></div>
+                                    <div><input type="checkbox" name="cuisine-pref" id="cuisine-western" value="양식" class="hidden"><label for="cuisine-western" class="checkbox-label" data-tooltip="파스타, 스테이크 등 서양식 메뉴 위주로 구성합니다.">양식</label></div>
+                                    <div><input type="checkbox" name="cuisine-pref" id="cuisine-chinese" value="중식" class="hidden"><label for="cuisine-chinese" class="checkbox-label" data-tooltip="짜장면, 짬뽕 등 중국 요리 위주로 구성합니다.">중식</label></div>
+                                    <div><input type="checkbox" name="cuisine-pref" id="cuisine-japanese" value="일식" class="hidden"><label for="cuisine-japanese" class="checkbox-label" data-tooltip="초밥, 라멘 등 일본 요리 위주로 구성합니다.">일식</label></div>
+                                    <div><input type="checkbox" name="cuisine-pref" id="cuisine-asian" value="아시안" class="hidden"><label for="cuisine-asian" class="checkbox-label" data-tooltip="쌀국수, 팟타이 등 동남아시아 요리 위주로 구성합니다.">아시안</label></div>
+                                    <div><input type="checkbox" name="cuisine-pref" id="cuisine-world" value="제3세계 요리" class="hidden"><label for="cuisine-world" class="checkbox-label" data-tooltip="아프리카, 남미, 중동 등 평소에 접하기 힘든 특별한 요리를 5% 내외로 추가합니다.">🌏 제3세계 요리</label></div>
                                 </div>
                             </div>
 
-                            <!-- Dietary Preferences -->
-                            <div>
-                                <label class="block text-md font-medium text-slate-600 mb-2">식단 성향</label>
-                                <div class="grid grid-cols-2 gap-3">
-                                    <label class="flex items-center p-3 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100"><input type="checkbox" id="pref-vegetarian" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3">채식</label>
-                                    <label class="flex items-center p-3 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100"><input type="checkbox" id="pref-spicy" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3">매운 음식</label>
-                                    <label class="flex items-center p-3 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100"><input type="checkbox" id="pref-seafood" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3">해산물</label>
-                                    <label class="flex items-center p-3 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-100"><input type="checkbox" id="pref-kids-friendly" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 mr-3">아이들 입맛</label>
-                                </div>
+                            <!-- Other options -->
+                             <div>
+                                <label for="disliked-ingredients" class="block text-md font-medium text-slate-600 mb-2">제외할 식재료</label>
+                                <input type="text" id="disliked-ingredients" placeholder="예: 오이, 가지 (쉼표로 구분)" class="w-full p-3 border border-slate-300 rounded-lg">
                             </div>
-
-                            <!-- Health Goal -->
-                            <div>
-                                <label for="health-goal" class="block text-md font-medium text-slate-600 mb-2">주요 목표</label>
-                                <select id="health-goal" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white">
-                                    <option value="general">균형 잡힌 영양</option>
-                                    <option value="weight-loss">체중 조절</option>
-                                    <option value="muscle-gain">근력 강화</option>
-                                </select>
+                             <div>
+                                <label for="special-requests" class="block text-md font-medium text-slate-600 mb-2">추가 요청사항</label>
+                                <textarea id="special-requests" rows="3" placeholder="예: 아이가 야채를 잘 먹을 수 있는 메뉴로 짜주세요." class="w-full p-3 border border-slate-300 rounded-lg"></textarea>
                             </div>
-
-                            <!-- Meal Frequency -->
                             <div>
                                 <label class="block text-md font-medium text-slate-600 mb-2">식사 횟수</label>
                                 <div class="flex space-x-4">
-                                    <label class="flex items-center"><input type="radio" name="meal-freq" value="3" checked class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 mr-2">하루 3끼</label>
-                                    <label class="flex items-center"><input type="radio" name="meal-freq" value="2" class="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500 mr-2">하루 2끼</label>
+                                    <label class="flex items-center"><input type="radio" name="meal-freq" value="3" checked class="h-4 w-4 text-blue-600"> 하루 3끼</label>
+                                    <label class="flex items-center"><input type="radio" name="meal-freq" value="2" class="h-4 w-4 text-blue-600"> 하루 2끼</label>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Generate Buttons -->
                         <div class="mt-8 pt-6 border-t border-slate-200 space-y-3">
-                             <button type="button" id="generate-today-btn" class="btn btn-tertiary">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M3 3h18v18H3zM12 8v8m-4-4h8"/></svg>
-                                오늘 뭐 먹지?
-                            </button>
-                             <button type="button" id="generate-week-btn" class="btn btn-secondary">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path><path d="M8 18h.01"></path><path d="M12 18h.01"></path><path d="M16 18h.01"></path></svg>
-                                주간 식단 생성
-                            </button>
-                            <button type="button" id="generate-month-btn" class="btn btn-primary">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2v0Z"/><path d="M12 8v8"/><path d="m8.5 10.5 7 3-7 3Z"/></svg>
-                                월간 식단 생성
-                            </button>
+                             <button type="button" id="generate-today-btn" class="btn btn-tertiary"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" class="mr-2"><path d="M3 3h18v18H3zM12 8v8m-4-4h8"/></svg>오늘 뭐 먹지?</button>
+                             <button type="button" id="generate-week-btn" class="btn btn-secondary"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" class="mr-2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>주간 식단 생성</button>
+                             <button type="button" id="generate-month-btn" class="btn btn-primary"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" class="mr-2"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2v0Z"/><path d="M12 8v8"/><path d="m8.5 10.5 7 3-7 3Z"/></svg>월간 식단 생성</button>
                         </div>
                     </form>
                 </div>
@@ -174,264 +240,305 @@
                     <div class="flex justify-between items-center mb-6 border-b border-slate-200 pb-4">
                          <h2 id="result-title" class="text-2xl font-bold text-slate-800">나의 식단표</h2>
                          <div id="action-buttons" class="hidden">
-                            <button id="print-btn" class="btn btn-secondary !w-auto">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-                                인쇄하기
-                            </button>
+                            <button id="print-btn" class="btn btn-secondary !w-auto"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2" class="mr-2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>인쇄하기</button>
                          </div>
                     </div>
                    
                     <div id="plan-output" class="overflow-x-auto">
                         <div id="initial-message" class="flex flex-col items-center justify-center text-center h-96">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="w-20 h-20 text-slate-300 mb-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" ><path d="M15.5 2H8.6c-.4 0-.8.2-1.1.5-.3.3-.5.7-.5 1.1V21c0 .6.4 1 1 1h12c.6 0 1-.4 1-1V8.5L15.5 2z"/><path d="M15 2v5h5"/><path d="M10 16s.8-1 2-1 2 1 2 1"/><path d="M10 12s.8-1 2-1 2 1 2 1"/></svg>
-                            <h3 class="text-xl font-semibold text-slate-600">식단을 만들어 볼까요?</h3>
-                            <p class="text-slate-500 mt-2">왼쪽에서 원하는 설정을 선택하고<br>버튼을 눌러 나만의 식단을 생성해 보세요.</p>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-20 h-20 text-slate-300 mb-6" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15.5 2H8.6c-.4 0-.8.2-1.1.5-.3.3-.5.7-.5 1.1V21c0 .6.4 1 1 1h12c.6 0 1-.4 1-1V8.5L15.5 2z"/><path d="M15 2v5h5"/><path d="M10 16s.8-1 2-1 2 1 2 1"/><path d="M10 12s.8-1 2-1 2 1 2 1"/></svg>
+                            <h3 class="text-xl font-semibold text-slate-600">AI 식단을 만들어 볼까요?</h3>
+                            <p class="text-slate-500 mt-2">API 키를 입력하고 설정을 선택한 뒤<br>버튼을 눌러 실시간으로 식단을 생성해 보세요.</p>
                         </div>
-                        <div id="loading-spinner" class="hidden flex items-center justify-center h-96">
+                        <div id="loading-spinner" class="hidden flex flex-col items-center justify-center h-96">
                             <div class="loader"></div>
+                            <p class="mt-4 text-slate-500 text-center">최고의 AI 요리사가<br>당신만을 위한 레시피를 구상 중입니다...</p>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+    <div id="tooltip"></div>
 
     <script>
-        // --- RECIPE DATABASE (EXPANDED) ---
-        const recipes = {
-            breakfast: [
-                { name: '현미밥과 미역국', tags: ['general', 'kids-friendly'] },
-                { name: '스크램블 에그와 통밀빵', tags: ['general', 'muscle-gain', 'kids-friendly'] },
-                { name: '오트밀과 과일', tags: ['general', 'weight-loss', 'vegetarian', 'kids-friendly'] },
-                { name: '닭가슴살 샌드위치', tags: ['general', 'muscle-gain', 'weight-loss'] },
-                { name: '그릭 요거트와 견과류', tags: ['general', 'muscle-gain', 'weight-loss', 'vegetarian'] },
-                { name: '간단한 김밥', tags: ['general', 'kids-friendly'] },
-                { name: '두부 유부초밥', tags: ['general', 'weight-loss', 'vegetarian', 'kids-friendly'] },
-                { name: '누룽지와 계란찜', tags: ['general', 'kids-friendly'] },
-                { name: '전복죽', tags: ['general', 'kids-friendly', 'seafood'] },
-                { name: '야채죽', tags: ['general', 'vegetarian', 'kids-friendly'] },
-                { name: '프렌치 토스트', tags: ['general', 'kids-friendly'] },
-                { name: '과일 스무디', tags: ['general', 'weight-loss', 'vegetarian', 'kids-friendly'] },
-                { name: '미숫가루', tags: ['general', 'vegetarian'] },
-                { name: '떡국', tags: ['general', 'kids-friendly'] },
-                { name: '시리얼과 우유', tags: ['general', 'kids-friendly'] }
-            ],
-            lunch_dinner: [
-                 // 찌개/탕류 (Stews/Soups)
-                { name: '김치찌개와 잡곡밥', tags: ['general', 'spicy'] },
-                { name: '된장찌개와 보리밥', tags: ['general', 'kids-friendly'] },
-                { name: '순두부찌개', tags: ['general', 'spicy', 'vegetarian', 'seafood'] },
-                { name: '부대찌개', tags: ['general', 'spicy'] },
-                { name: '동태찌개', tags: ['general', 'spicy', 'seafood'] },
-                { name: '알탕', tags: ['general', 'spicy', 'seafood'] },
-                { name: '감자탕', tags: ['general', 'spicy', 'muscle-gain'] },
-                { name: '설렁탕', tags: ['general', 'muscle-gain', 'kids-friendly'] },
-                { name: '갈비탕', tags: ['general', 'muscle-gain'] },
-                { name: '육개장', tags: ['general', 'spicy', 'muscle-gain'] },
-                { name: '어묵탕', tags: ['general', 'kids-friendly', 'seafood'] },
-                { name: '콩비지찌개', tags: ['general', 'vegetarian', 'kids-friendly'] },
-                { name: '청국장', tags: ['general'] },
-                { name: '닭볶음탕', tags: ['general', 'spicy', 'muscle-gain'] },
-                { name: '삼계탕', tags: ['general', 'muscle-gain'] },
-                { name: '추어탕', tags: ['general'] },
-
-                // 볶음/구이/조림류 (Stir-fried/Grilled/Braised)
-                { name: '소불고기 덮밥', tags: ['general', 'muscle-gain', 'kids-friendly'] },
-                { name: '제육볶음과 쌈채소', tags: ['general', 'muscle-gain', 'spicy'] },
-                { name: '오징어볶음', tags: ['general', 'spicy', 'seafood'] },
-                { name: '쭈꾸미볶음', tags: ['general', 'spicy', 'seafood'] },
-                { name: '낙지볶음', tags: ['general', 'spicy', 'seafood'] },
-                { name: '닭갈비', tags: ['general', 'muscle-gain', 'spicy'] },
-                { name: '오리불고기', tags: ['general', 'muscle-gain'] },
-                { name: '고등어 구이와 쌀밥', tags: ['general', 'seafood'] },
-                { name: '삼치 구이', tags: ['general', 'seafood', 'kids-friendly'] },
-                { name: 'LA갈비구이', tags: ['general', 'muscle-gain', 'kids-friendly'] },
-                { name: '떡갈비', tags: ['general', 'muscle-gain', 'kids-friendly'] },
-                { name: '삼겹살 구이', tags: ['general', 'muscle-gain'] },
-                { name: '더덕구이', tags: ['general', 'vegetarian', 'spicy'] },
-                { name: '코다리조림', tags: ['general', 'spicy', 'seafood'] },
-                { name: '갈치조림', tags: ['general', 'spicy', 'seafood'] },
-                { name: '두부조림', tags: ['general', 'vegetarian', 'kids-friendly'] },
-                { name: '계란장조림', tags: ['general', 'kids-friendly'] },
-                
-                // 밥/면류 (Rice/Noodles)
-                { name: '비빔밥', tags: ['general', 'weight-loss', 'vegetarian', 'spicy'] },
-                { name: '김치볶음밥', tags: ['general', 'spicy'] },
-                { name: '새우볶음밥', tags: ['general', 'seafood', 'kids-friendly'] },
-                { name: '오므라이스', tags: ['general', 'kids-friendly'] },
-                { name: '카레라이스', tags: ['general', 'kids-friendly'] },
-                { name: '짜장밥', tags: ['general', 'kids-friendly'] },
-                { name: '회덮밥', tags: ['general', 'weight-loss', 'seafood', 'spicy'] },
-                { name: '알밥', tags: ['general', 'seafood', 'kids-friendly'] },
-                { name: '잔치국수', tags: ['general'] },
-                { name: '비빔국수', tags: ['general', 'spicy'] },
-                { name: '칼국수', tags: ['general', 'seafood'] },
-                { name: '콩국수', tags: ['general', 'vegetarian'] },
-                { name: '라면', tags: ['general', 'spicy'] },
-                { name: '짜장면', tags: ['general'] },
-                { name: '짬뽕', tags: ['general', 'spicy', 'seafood'] },
-                { name: '쌀국수', tags: ['general', 'seafood'] },
-                { name: '볶음우동', tags: ['general', 'seafood'] },
-                
-                // 찜/기타 한식 (Steamed/Other Korean)
-                { name: '찜닭', tags: ['general', 'muscle-gain', 'kids-friendly'] },
-                { name: '아귀찜', tags: ['general', 'spicy', 'seafood'] },
-                { name: '해물찜', tags: ['general', 'spicy', 'seafood'] },
-                { name: '돼지고기 수육', tags: ['general', 'muscle-gain'] },
-                { name: '족발', tags: ['general', 'muscle-gain'] },
-                { name: '해물파전', tags: ['general', 'seafood'] },
-                { name: '김치전', tags: ['general', 'spicy'] },
-                { name: '잡채', tags: ['general', 'vegetarian', 'kids-friendly'] },
-                { name: '골뱅이무침', tags: ['general', 'spicy'] },
-                { name: '묵은지 김치찜', tags: ['general', 'spicy'] },
-                { name: '닭백숙', tags: ['general', 'muscle-gain'] },
-                
-                // 양식/기타 (Western/Others)
-                { name: '토마토 해산물 파스타', tags: ['general', 'seafood'] },
-                { name: '크림 버섯 리조또', tags: ['general', 'vegetarian', 'kids-friendly'] },
-                { name: '알리오 올리오', tags: ['general', 'vegetarian'] },
-                { name: '봉골레 파스타', tags: ['general', 'seafood'] },
-                { name: '라자냐', tags: ['general', 'muscle-gain'] },
-                { name: '함박스테이크', tags: ['general', 'muscle-gain', 'kids-friendly'] },
-                { name: '돈까스', tags: ['general', 'kids-friendly'] },
-                { name: '연어 스테이크와 아스파라거스', tags: ['general', 'weight-loss', 'muscle-gain', 'seafood'] },
-                { name: '소고기 스테이크', tags: ['general', 'muscle-gain'] },
-                { name: '목살 스테이크', tags: ['general', 'muscle-gain'] },
-                { name: '고르곤졸라 피자', tags: ['general', 'vegetarian', 'kids-friendly'] },
-                { name: '마르게리따 피자', tags: ['general', 'vegetarian'] },
-                { name: '월남쌈', tags: ['general', 'weight-loss', 'vegetarian'] },
-                { name: '마파두부 덮밥', tags: ['general', 'spicy', 'vegetarian'] },
-                { name: '탕수육', tags: ['general'] },
-                { name: '깐풍기', tags: ['general', 'spicy'] },
-                { name: '꿔바로우', tags: ['general'] },
-                { name: '양장피', tags: ['general', 'seafood'] },
-
-                // 건강식/채식 (Healthy/Vegetarian)
-                { name: '닭가슴살 샐러드', tags: ['weight-loss', 'muscle-gain', 'vegetarian'] },
-                { name: '리코타치즈 샐러드', tags: ['weight-loss', 'vegetarian', 'kids-friendly'] },
-                { name: '두부 스테이크', tags: ['weight-loss', 'muscle-gain', 'vegetarian'] },
-                { name: '버섯 강정', tags: ['vegetarian', 'kids-friendly'] },
-                { name: '채식 잡채', tags: ['vegetarian', 'kids-friendly'] },
-                { name: '콩고기 탕수', tags: ['vegetarian', 'muscle-gain'] },
-                { name: '야채 튀김', tags: ['vegetarian'] },
-                { name: '궁중떡볶이', tags: ['general', 'kids-friendly'] },
-                { name: '콥 샐러드', tags: ['weight-loss', 'muscle-gain']}
-            ]
-        };
-
-        const form = document.getElementById('meal-plan-form');
         const outputDiv = document.getElementById('plan-output');
         const initialMessage = document.getElementById('initial-message');
         const loadingSpinner = document.getElementById('loading-spinner');
         const actionButtons = document.getElementById('action-buttons');
         const printBtn = document.getElementById('print-btn');
         const resultTitle = document.getElementById('result-title');
-
+        const apiKeyInput = document.getElementById('api-key');
+        const allButtons = document.querySelectorAll('button[type="button"]');
+        
         const monthBtn = document.getElementById('generate-month-btn');
         const weekBtn = document.getElementById('generate-week-btn');
         const todayBtn = document.getElementById('generate-today-btn');
 
+        const apiKeyInputArea = document.getElementById('api-key-input-area');
+        const apiKeyStatus = document.getElementById('api-key-status');
+        const editApiKeyBtn = document.getElementById('edit-api-key-btn');
+
+        // Tooltip
+        const tooltip = document.getElementById('tooltip');
+
+        // Sound effect setup
+        let soundInitialized = false;
+        let synth;
+
+        function initializeAudio() {
+            if (soundInitialized || typeof Tone === 'undefined') {
+                return;
+            }
+            try {
+                Tone.start(); 
+                synth = new Tone.Synth({
+                    oscillator: { type: 'sine' },
+                    envelope: { attack: 0.005, decay: 0.1, sustain: 0.2, release: 0.1 }
+                }).toDestination();
+                soundInitialized = true;
+            } catch (e) {
+                console.error("Could not initialize audio context:", e);
+            }
+        }
+
+        const playTickSound = () => {
+            initializeAudio();
+            if (synth) synth.triggerAttackRelease("C5", "8n", Tone.now());
+        };
+
+        const playTockSound = () => {
+            initializeAudio();
+            if (synth) synth.triggerAttackRelease("A4", "8n", Tone.now());
+        };
+
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            loadApiKey();
+            updateApiSectionVisibility();
+
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(checkbox => {
+                checkbox.addEventListener('change', (event) => {
+                    if (event.target.checked) {
+                        playTickSound();
+                    } else {
+                        playTockSound();
+                    }
+                });
+            });
+
+            const elementsWithTooltip = document.querySelectorAll('[data-tooltip]');
+            elementsWithTooltip.forEach(el => {
+                el.addEventListener('mouseenter', (e) => {
+                    tooltip.textContent = el.dataset.tooltip;
+                    tooltip.style.opacity = '1';
+                    
+                    const rect = el.getBoundingClientRect();
+                    const tooltipRect = tooltip.getBoundingClientRect();
+                    tooltip.style.left = `${rect.left + rect.width / 2 - tooltipRect.width / 2}px`;
+                    tooltip.style.top = `${rect.bottom + 8}px`; // 8px below the element
+                });
+
+                el.addEventListener('mousemove', (e) => {
+                     const rect = el.getBoundingClientRect();
+                    const tooltipRect = tooltip.getBoundingClientRect();
+                    tooltip.style.left = `${rect.left + rect.width / 2 - tooltipRect.width / 2}px`;
+                    tooltip.style.top = `${rect.bottom + 8}px`;
+                });
+
+                el.addEventListener('mouseleave', () => {
+                    tooltip.style.opacity = '0';
+                });
+            });
+        });
+
+        editApiKeyBtn.addEventListener('click', () => {
+            apiKeyInputArea.classList.remove('hidden');
+            apiKeyStatus.classList.add('hidden');
+            apiKeyInput.focus();
+        });
         monthBtn.addEventListener('click', () => prepareAndGenerate(30));
         weekBtn.addEventListener('click', () => prepareAndGenerate(7));
         todayBtn.addEventListener('click', () => prepareAndGenerate(1));
-        
-        printBtn.addEventListener('click', () => {
-            window.print();
-        });
+        printBtn.addEventListener('click', () => window.print());
+
+        // API Key Management
+        function updateApiSectionVisibility() {
+            if (apiKeyInput.value.trim()) {
+                apiKeyInputArea.classList.add('hidden');
+                apiKeyStatus.classList.remove('hidden');
+            } else {
+                apiKeyInputArea.classList.remove('hidden');
+                apiKeyStatus.classList.add('hidden');
+            }
+        }
+
+        function loadApiKey() {
+            const savedKey = localStorage.getItem('leeseongMealPlannerApiKey');
+            if (savedKey) {
+                apiKeyInput.value = savedKey;
+            }
+        }
+
+        function saveApiKey(key) {
+            localStorage.setItem('leeseongMealPlannerApiKey', key);
+            updateApiSectionVisibility();
+        }
+
+        function setButtonsDisabled(disabled) {
+            allButtons.forEach(button => {
+                if (button.id !== 'edit-api-key-btn') {
+                    button.disabled = disabled;
+                }
+            });
+        }
         
         function prepareAndGenerate(days) {
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                showCustomMessage('Gemini API 키를 입력해주세요.');
+                return;
+            }
+            saveApiKey(apiKey);
+
             initialMessage.classList.add('hidden');
-            outputDiv.innerHTML = ''; // Clear previous results
+            outputDiv.innerHTML = '';
             outputDiv.appendChild(loadingSpinner);
             loadingSpinner.classList.remove('hidden');
             actionButtons.classList.add('hidden');
-            resultTitle.textContent = '나의 식단표'; // Reset title
+            resultTitle.textContent = '나의 식단표';
+            setButtonsDisabled(true);
 
-            // Simulate AI thinking time
-            setTimeout(() => {
-                generateMealPlan(days);
-            }, 1000);
-        }
+            // Get selected checkboxes
+            const selectedGoals = Array.from(document.querySelectorAll('input[name="health-goal"]:checked')).map(el => el.value).join(', ');
+            const selectedCuisines = Array.from(document.querySelectorAll('input[name="cuisine-pref"]:checked')).map(el => el.value).join(', ');
 
-        function generateMealPlan(numberOfDays) {
-            // 1. Get user inputs
-            const healthGoal = document.getElementById('health-goal').value;
-            const mealFreq = document.querySelector('input[name="meal-freq"]:checked').value;
-            const prefs = {
-                vegetarian: document.getElementById('pref-vegetarian').checked,
-                spicy: document.getElementById('pref-spicy').checked,
-                seafood: document.getElementById('pref-seafood').checked,
-                'kids-friendly': document.getElementById('pref-kids-friendly').checked,
+            const userInputs = {
+                adults: document.getElementById('adults').value,
+                children: document.getElementById('children').value,
+                healthGoal: selectedGoals || '특별히 없음',
+                mealFreq: document.querySelector('input[name="meal-freq"]:checked').value,
+                cuisine: selectedCuisines || '상관 없음',
+                disliked: document.getElementById('disliked-ingredients').value.trim(),
+                requests: document.getElementById('special-requests').value.trim(),
+                days: days
             };
 
-            // 2. Filter recipes based on inputs
-            let filteredBreakfast = [...recipes.breakfast];
-            let filteredLunchDinner = [...recipes.lunch_dinner];
-
-            // Primary Goal Filter
-            if (healthGoal !== 'general') {
-                filteredBreakfast = filteredBreakfast.filter(r => r.tags.includes(healthGoal) || r.tags.includes('general'));
-                filteredLunchDinner = filteredLunchDinner.filter(r => r.tags.includes(healthGoal) || r.tags.includes('general'));
-            }
-
-            // Preference Filter
-            const activePrefs = Object.keys(prefs).filter(pref => prefs[pref]);
-            if (activePrefs.length > 0) {
-                filteredBreakfast = filteredBreakfast.filter(r => activePrefs.every(pref => r.tags.includes(pref)));
-                filteredLunchDinner = filteredLunchDinner.filter(r => activePrefs.every(pref => r.tags.includes(pref)));
-            }
-            
-            // Check if there are enough recipes
-            if (filteredBreakfast.length === 0 || filteredLunchDinner.length < 2) {
-                 loadingSpinner.classList.add('hidden');
-                 outputDiv.innerHTML = `<div class="text-center p-8 text-red-600 bg-red-50 rounded-lg">
-                    <h3 class="font-bold text-lg mb-2">레시피가 부족해요!</h3>
-                    <p>선택하신 조건에 맞는 식단을 만들 수 없어요. 다른 옵션을 선택해 주세요.<br/>(예: '채식'과 '해산물'을 동시에 선택하면 메뉴가 부족할 수 있습니다.)</p>
-                 </div>`;
-                 return;
-            }
-
-            // 3. Generate plan
-            let plan = [];
-            let lastLunchDinner = '';
-            for (let i = 1; i <= numberOfDays; i++) {
-                const dayPlan = { day: i };
-                
-                dayPlan.breakfast = getRandomItem(filteredBreakfast).name;
-
-                if (mealFreq === '3') {
-                     let lunch;
-                    do {
-                        lunch = getRandomItem(filteredLunchDinner).name;
-                    } while (lunch === lastLunchDinner);
-                    dayPlan.lunch = lunch;
-                    lastLunchDinner = lunch;
-                } else {
-                    dayPlan.lunch = '—';
-                }
-
-                let dinner;
-                do {
-                    dinner = getRandomItem(filteredLunchDinner).name;
-                } while (dinner === lastLunchDinner);
-                dayPlan.dinner = dinner;
-                lastLunchDinner = dinner;
-                
-                plan.push(dayPlan);
-            }
-
-            // 4. Display the plan
-            displayPlan(plan, mealFreq, numberOfDays);
+            const prompt = constructPrompt(userInputs);
+            callGeminiAPI(prompt, apiKey, userInputs);
         }
 
-        function getRandomItem(arr) {
-            if (arr.length === 0) return { name: '추천 메뉴 없음' };
-            return arr[Math.floor(Math.random() * arr.length)];
+        function constructPrompt(inputs) {
+            const jjeomOSpecialMenu = [
+                "가지 솥밥", "카레", "토마토 스튜", "모닝 토스트", "떡볶이",
+                "바질 리조또", "가츠동", "마파두부", "굴국", "소보로 덮밥",
+                "간장 등갈비", "간장 오징어 볶음", "우삼겹 솥밥", "비빔국수",
+                "브리또", "토마토 홍합찜", "연어 샌드위치"
+            ];
+
+            let specialInstruction = '';
+            if (inputs.cuisine.includes('쩜오특선')) {
+                const specialMenuList = jjeomOSpecialMenu.join(', ');
+                specialInstruction = `\n- **특별 메뉴:** 다음은 우리 가족이 특히 좋아하는 메뉴 목록입니다. 생성되는 전체 식단에 이 메뉴들을 약 10~20% 비율로 자연스럽게 섞어서 포함시켜 주세요: [${specialMenuList}]`;
+            }
+            
+            let worldCuisineInstruction = '';
+            if (inputs.cuisine.includes('제3세계 요리')) {
+                worldCuisineInstruction = `\n- **특별 요청:** 식단에 제3세계 요리(예: 아프리카, 남미, 중동 등)를 약 5% 비율로 포함시켜 주세요.`;
+            }
+
+            const finalCuisine = inputs.cuisine
+                .replace(/, 쩜오특선|쩜오특선, |쩜오특선/g, '')
+                .replace(/, 제3세계 요리|제3세계 요리, |제3세계 요리/g, '')
+                .trim() || '상관 없음';
+
+            let prompt = `당신은 전문 영양사이자 요리사입니다. 아래의 조건에 맞춰 식단을 생성해주세요.
+
+            **식단 조건:**
+            - **기간:** ${inputs.days}일
+            - **대상:** 어른 ${inputs.adults}명, 아이 ${inputs.children}명
+            - **주요 목표:** ${inputs.healthGoal}
+            - **선호 음식:** ${finalCuisine}
+            ${inputs.disliked ? `- **제외할 식재료:** ${inputs.disliked}` : ''}
+            ${inputs.requests ? `- **추가 요청사항:** ${inputs.requests}` : ''}
+            ${specialInstruction}
+            ${worldCuisineInstruction}
+            - 점심과 저녁 메뉴는 서로 겹치지 않게, 그리고 전날 메뉴와도 최대한 겹치지 않게 다양하게 구성해주세요.
+            - 반드시 한국어로 대답해주세요.
+
+            **출력 형식:**
+            반드시 아래와 같은 JSON 형식으로만 응답해주세요. 다른 설명은 절대 추가하지 마세요.
+            - 'day', 'breakfast', 'lunch', 'dinner' 키를 가진 객체들의 배열(Array) 형태로 출력해주세요.
+            - 하루 2끼 식단일 경우, 'lunch' 값은 "—" (하이픈)으로 표시해주세요.
+
+            **JSON 출력 예시:**
+            [
+              {
+                "day": 1,
+                "breakfast": "현미밥과 미역국",
+                "lunch": "소불고기 덮밥",
+                "dinner": "고등어 구이와 쌈채소"
+              }
+            ]
+            `;
+            return prompt;
+        }
+
+        async function callGeminiAPI(prompt, apiKey, inputs) {
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                }
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error.message || `HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const text = result.candidates[0].content.parts[0].text;
+                const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                const plan = JSON.parse(cleanedText);
+                displayPlan(plan, inputs.mealFreq, inputs.days);
+
+            } catch (error) {
+                console.error("Error calling Gemini API:", error);
+                loadingSpinner.classList.add('hidden');
+                outputDiv.innerHTML = `<div class="text-center p-8 text-red-600 bg-red-50 rounded-lg">
+                    <h3 class="font-bold text-lg mb-2">AI 호출 오류!</h3>
+                    <p>식단을 생성하는 데 실패했습니다. 아래 내용을 확인해주세요.</p>
+                    <ul class="text-sm mt-2 text-left list-disc list-inside">
+                        <li>입력한 API 키가 정확한지 확인해주세요.</li>
+                        <li>네트워크 연결 상태를 확인해주세요.</li>
+                        <li>콘솔(F12)에서 더 자세한 오류를 볼 수 있습니다.</li>
+                    </ul>
+                    <p class="mt-4 text-xs">${error.message}</p>
+                 </div>`;
+            } finally {
+                setButtonsDisabled(false);
+            }
         }
 
         function displayPlan(plan, mealFreq, numberOfDays) {
             loadingSpinner.classList.add('hidden');
             
+            const startDate = new Date();
+            if (numberOfDays > 1) {
+                startDate.setDate(startDate.getDate() + 1); // Start from tomorrow for week/month plans
+            }
+
             if (numberOfDays === 1) {
                 resultTitle.textContent = "✨ 오늘의 추천 메뉴";
             } else {
@@ -442,30 +549,33 @@
                 <table class="w-full text-sm text-left text-slate-500">
                     <thead class="text-xs text-slate-700 bg-slate-100 rounded-t-lg">
                         <tr>
-                            <th scope="col" class="py-3 px-4 w-1/12 text-center rounded-tl-lg">날짜</th>
+                            <th scope="col" class="py-3 px-4 w-2/12 text-center rounded-tl-lg">일자</th>
                             <th scope="col" class="py-3 px-4 w-3/12">아침</th>
                             ${mealFreq === '3' ? '<th scope="col" class="py-3 px-4 w-4/12">점심</th>' : ''}
-                            <th scope="col" class="py-3 px-4 w-4/12 rounded-tr-lg">저녁</th>
+                            <th scope="col" class="py-3 px-4 w-3/12 rounded-tr-lg">저녁</th>
                         </tr>
                     </thead>
                     <tbody>
             `;
+            
+            const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
 
-            plan.forEach(dayData => {
-                let weekDay, dayClass, dateCellContent;
+            plan.forEach((dayData, index) => {
+                const currentDate = new Date(startDate);
+                currentDate.setDate(startDate.getDate() + index);
 
+                const month = currentDate.getMonth() + 1;
+                const day = currentDate.getDate();
+                const weekDay = weekdays[currentDate.getDay()];
+                
+                let dayClass = 'bg-white';
+                if (weekDay === '토') dayClass = 'bg-sky-50';
+                if (weekDay === '일') dayClass = 'bg-rose-50';
+
+                let dateCellContent = `${month}/${day}`;
                 if (numberOfDays === 1) {
-                    const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
-                    const todayIndex = new Date().getDay();
-                    weekDay = weekdays[todayIndex];
+                    dateCellContent = '오늘';
                     dayClass = 'bg-amber-50';
-                    dateCellContent = `오늘`;
-                } else {
-                    weekDay = getWeekday(dayData.day);
-                    dayClass = 'bg-white';
-                    if (weekDay === '토') dayClass = 'bg-sky-50';
-                    if (weekDay === '일') dayClass = 'bg-rose-50';
-                    dateCellContent = `${dayData.day}일`;
                 }
 
                 tableHTML += `
@@ -485,12 +595,35 @@
             outputDiv.innerHTML = tableHTML;
             actionButtons.classList.remove('hidden');
         }
+        
+        function showCustomMessage(message) {
+            const messageBox = document.createElement('div');
+            messageBox.style.position = 'fixed';
+            messageBox.style.top = '20px';
+            messageBox.style.left = '50%';
+            messageBox.style.transform = 'translateX(-50%)';
+            messageBox.style.padding = '1rem 2rem';
+            messageBox.style.backgroundColor = 'rgba(15, 23, 42, 0.9)'; // slate-900
+            messageBox.style.color = 'white';
+            messageBox.style.borderRadius = '0.75rem';
+            messageBox.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)';
+            messageBox.style.zIndex = '9999';
+            messageBox.style.opacity = '0';
+            messageBox.style.transition = 'opacity 0.3s ease-in-out';
+            messageBox.textContent = message;
 
-        function getWeekday(dayOfMonth) {
-            // Assuming the month starts on a Monday for simplicity
-            const dayIndex = (dayOfMonth - 1) % 7;
-            const weekdays = ['월', '화', '수', '목', '금', '토', '일'];
-            return weekdays[dayIndex];
+            document.body.appendChild(messageBox);
+
+            setTimeout(() => {
+                messageBox.style.opacity = '1';
+            }, 10);
+            
+            setTimeout(() => {
+                messageBox.style.opacity = '0';
+                setTimeout(() => {
+                    document.body.removeChild(messageBox);
+                }, 300);
+            }, 3000);
         }
     </script>
 </body>
