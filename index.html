@@ -4,6 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leeseong's Meal Planner (AI Ver.)</title>
+
+    <!-- Open Graph Meta Tags for social sharing -->
+    <meta property="og:title" content="Leeseong's Meal Planner (AI Ver.)">
+    <meta property="og:description" content="가족을 위한 건강한 맞춤형 식단을 AI가 실시간으로 생성합니다.">
+    <meta property="og:image" content="https://placehold.co/1200x630/2563EB/FFFFFF?text=Leeseong's%0AMeal%20Planner">
+    <meta property="og:url" content="https://leenom.github.io/personal-meal-planner/">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Leeseong's Meal Planner (AI Ver.)">
+    <meta name="twitter:description" content="가족을 위한 건강한 맞춤형 식단을 AI가 실시간으로 생성합니다.">
+    <meta name="twitter:image" content="https://placehold.co/1200x630/2563EB/FFFFFF?text=Leeseong's%0AMeal%20Planner">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -553,8 +565,8 @@
 
                 tableHTML += `<tr class="${dayClass} border-b border-slate-200" data-day-index="${index}"><td class="py-4 px-4 font-bold text-slate-900 text-center">${dateCellContent}<span class="block text-xs font-normal text-slate-500">${weekDay}</span></td>
                 <td class="py-4 px-4 meal-cell relative"><span class="meal-text">${dayData.breakfast}</span><button class="regenerate-btn" data-meal-type="breakfast"><svg class="w-4 h-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6"/><path d="M22 11.5A10 10 0 0 0 3.5 12.5"/><path d="M2 12.5a10 10 0 0 0 18.5-1"/></svg></button></td>
-                ${mealFreq === '3' ? `<td class="py-4 px-4 meal-cell relative"><span class="meal-text">${dayData.lunch}</span><button class="regenerate-btn" data-meal-type="lunch"><svg class="w-4 h-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6"/><path d="M22 11.5A10 10 0 0 0 3.5 12.5"/><path d="M2 12.5a10 10 0 0 0 18.5-1"/></svg></button></td>` : ''}
-                <td class="py-4 px-4 meal-cell relative"><span class="meal-text">${dayData.dinner}</span><button class="regenerate-btn" data-meal-type="dinner"><svg class="w-4 h-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6"/><path d="M22 11.5A10 10 0 0 0 3.5 12.5"/><path d="M2 12.5a10 10 0 0 0 18.5-1"/></svg></button></td></tr>`;
+                ${mealFreq === '3' ? `<td class="py-4 px-4 meal-cell relative"><span class="meal-text">${dayData.lunch}</span><button class="regenerate-btn" data-meal-type="lunch"><svg class="w-4 h-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6"/><path d="M22 11.5A10 10 0 0 0 3.5 12.5"/><path d="M2 12.5a10 10 0 0 0 18.5-1"/></svg></button></td>` : ''}
+                <td class="py-4 px-4 meal-cell relative"><span class="meal-text">${dayData.dinner}</span><button class="regenerate-btn" data-meal-type="dinner"><svg class="w-4 h-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6"/><path d="M22 11.5A10 10 0 0 0 3.5 12.5"/><path d="M2 12.5a10 10 0 0 0 18.5-1"/></svg></button></td></tr>`;
             });
             tableHTML += `</tbody></table>`;
             outputDiv.innerHTML = tableHTML;
