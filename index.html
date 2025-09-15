@@ -495,18 +495,37 @@
                 }
             };
 
+            const fetchWithRetry = async (url, options, retries = 3, delay = 1000) => {
+                for (let i = 0; i < retries; i++) {
+                    try {
+                        const response = await fetch(url, options);
+                        if (response.status === 503 || response.status === 429) {
+                           throw new Error('Model is overloaded. Retrying...');
+                        }
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error.message || `HTTP error! status: ${response.status}`);
+                        }
+                        return response;
+                    } catch (error) {
+                        if (i < retries - 1) {
+                            console.log(`Attempt ${i + 1} failed: ${error.message}. Retrying in ${delay / 1000}s...`);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            delay *= 2; 
+                        } else {
+                            throw error; 
+                        }
+                    }
+                }
+            };
+
             try {
-                const response = await fetch(apiUrl, {
+                const response = await fetchWithRetry(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error.message || `HTTP error! status: ${response.status}`);
-                }
-
+                
                 const result = await response.json();
                 const text = result.candidates[0].content.parts[0].text;
                 const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -520,9 +539,9 @@
                     <h3 class="font-bold text-lg mb-2">AI 호출 오류!</h3>
                     <p>식단을 생성하는 데 실패했습니다. 아래 내용을 확인해주세요.</p>
                     <ul class="text-sm mt-2 text-left list-disc list-inside">
+                        <li>AI 모델이 일시적으로 과부하 상태일 수 있습니다. 잠시 후 다시 시도해주세요.</li>
                         <li>입력한 API 키가 정확한지 확인해주세요.</li>
                         <li>네트워크 연결 상태를 확인해주세요.</li>
-                        <li>콘솔(F12)에서 더 자세한 오류를 볼 수 있습니다.</li>
                     </ul>
                     <p class="mt-4 text-xs">${error.message}</p>
                  </div>`;
