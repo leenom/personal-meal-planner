@@ -68,13 +68,15 @@
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
         }
+        .loader, .regenerate-btn.loading svg {
+            animation: spin 1s linear infinite;
+        }
         .loader {
             border: 4px solid #e2e8f0;
             border-top: 4px solid #2563EB;
             border-radius: 50%;
             width: 40px;
             height: 40px;
-            animation: spin 1s linear infinite;
         }
         @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -126,13 +128,29 @@
             opacity: 1;
             transform: scale(1);
         }
+        .regenerate-btn {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            background: white;
+            border-radius: 9999px;
+            padding: 0.25rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .meal-cell:hover .regenerate-btn {
+            opacity: 1;
+        }
+
 
         @media print {
             body { background-color: white; }
             body * { visibility: hidden; }
             #plan-output, #plan-output * { visibility: visible; }
             #plan-output { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; border: 1px solid #ccc; }
-            #action-buttons, .no-print { display: none; }
+            #action-buttons, .no-print, .regenerate-btn { display: none; }
         }
     </style>
 </head>
@@ -284,12 +302,12 @@
         const apiKeyStatus = document.getElementById('api-key-status');
         const editApiKeyBtn = document.getElementById('edit-api-key-btn');
 
-        // Tooltip
         const tooltip = document.getElementById('tooltip');
-
-        // Sound effect setup
         let soundInitialized = false;
         let synth;
+
+        let currentPlan = [];
+        let currentUserInputs = {};
 
         function initializeAudio() {
             if (soundInitialized || typeof Tone === 'undefined') return;
@@ -301,7 +319,6 @@
                         envelope: { attack: 0.005, decay: 0.1, sustain: 0.2, release: 0.1 }
                     }).toDestination();
                     soundInitialized = true;
-                    console.log('Audio context started successfully.');
                 } catch (e) {
                     console.error("Could not initialize audio synth:", e);
                 }
@@ -313,7 +330,6 @@
         document.body.addEventListener('click', initializeAudio, { once: true });
         document.body.addEventListener('touchstart', initializeAudio, { once: true });
 
-
         const playTickSound = () => {
             if (soundInitialized && synth) synth.triggerAttackRelease("C5", "8n", Tone.now());
         };
@@ -322,7 +338,6 @@
             if (soundInitialized && synth) synth.triggerAttackRelease("A4", "8n", Tone.now());
         };
 
-        // Event Listeners
         document.addEventListener('DOMContentLoaded', () => {
             loadApiKey();
             updateApiSectionVisibility();
@@ -330,11 +345,8 @@
             const checkboxes = document.querySelectorAll('input[type="checkbox"]');
             checkboxes.forEach(checkbox => {
                 checkbox.addEventListener('change', (event) => {
-                    if (event.target.checked) {
-                        playTickSound();
-                    } else {
-                        playTockSound();
-                    }
+                    if (event.target.checked) playTickSound();
+                    else playTockSound();
                 });
             });
 
@@ -345,24 +357,16 @@
                     tooltip.classList.add('visible');
                     
                     const rect = el.getBoundingClientRect();
-                    let top = rect.bottom + 8;
-                    let left = rect.left + rect.width / 2;
-
-                    // A bit of a trick to get the dimensions before it's fully rendered
                     tooltip.style.left = '-9999px';
                     tooltip.style.top = '-9999px';
                     const tooltipRect = tooltip.getBoundingClientRect();
                     
-                    left -= tooltipRect.width / 2;
+                    let left = rect.left + rect.width / 2 - tooltipRect.width / 2;
+                    let top = rect.bottom + 8;
 
-                    // Boundary checks
                     if (left < 8) left = 8;
-                    if (left + tooltipRect.width > window.innerWidth - 8) {
-                        left = window.innerWidth - tooltipRect.width - 8;
-                    }
-                    if (top + tooltipRect.height > window.innerHeight - 8) {
-                        top = rect.top - tooltipRect.height - 8;
-                    }
+                    if (left + tooltipRect.width > window.innerWidth - 8) left = window.innerWidth - tooltipRect.width - 8;
+                    if (top + tooltipRect.height > window.innerHeight - 8) top = rect.top - tooltipRect.height - 8;
 
                     tooltip.style.left = `${left}px`;
                     tooltip.style.top = `${top}px`;
@@ -372,6 +376,8 @@
                     tooltip.classList.remove('visible');
                 });
             });
+
+            outputDiv.addEventListener('click', handleRegenerateClick);
         });
 
         editApiKeyBtn.addEventListener('click', () => {
@@ -384,7 +390,6 @@
         todayBtn.addEventListener('click', () => prepareAndGenerate(1));
         printBtn.addEventListener('click', () => window.print());
 
-        // API Key Management
         function updateApiSectionVisibility() {
             if (apiKeyInput.value.trim()) {
                 apiKeyInputArea.classList.add('hidden');
@@ -397,9 +402,7 @@
 
         function loadApiKey() {
             const savedKey = localStorage.getItem('leeseongMealPlannerApiKey');
-            if (savedKey) {
-                apiKeyInput.value = savedKey;
-            }
+            if (savedKey) apiKeyInput.value = savedKey;
         }
 
         function saveApiKey(key) {
@@ -409,9 +412,7 @@
 
         function setButtonsDisabled(disabled) {
             allButtons.forEach(button => {
-                if (button.id !== 'edit-api-key-btn') {
-                    button.disabled = disabled;
-                }
+                if (button.id !== 'edit-api-key-btn') button.disabled = disabled;
             });
         }
         
@@ -431,11 +432,10 @@
             resultTitle.textContent = '나의 식단표';
             setButtonsDisabled(true);
 
-            // Get selected checkboxes
             const selectedGoals = Array.from(document.querySelectorAll('input[name="health-goal"]:checked')).map(el => el.value).join(', ');
             const selectedCuisines = Array.from(document.querySelectorAll('input[name="cuisine-pref"]:checked')).map(el => el.value).join(', ');
 
-            const userInputs = {
+            currentUserInputs = {
                 adults: document.getElementById('adults').value,
                 children: document.getElementById('children').value,
                 healthGoal: selectedGoals || '특별히 없음',
@@ -446,22 +446,16 @@
                 days: days
             };
 
-            const prompt = constructPrompt(userInputs);
-            callGeminiAPI(prompt, apiKey, userInputs);
+            const prompt = constructPrompt(currentUserInputs);
+            callGeminiAPI(prompt, apiKey, currentUserInputs);
         }
 
         function constructPrompt(inputs) {
-            const jjeomOSpecialMenu = [
-                "가지 솥밥", "카레", "토마토 스튜", "모닝 토스트", "떡볶이",
-                "바질 리조또", "가츠동", "마파두부", "굴국", "소보로 덮밥",
-                "간장 등갈비", "간장 오징어 볶음", "우삼겹 솥밥", "비빔국수",
-                "브리또", "토마토 홍합찜", "연어 샌드위치"
-            ];
+            const jjeomOSpecialMenu = ["가지 솥밥", "카레", "토마토 스튜", "모닝 토스트", "떡볶이", "바질 리조또", "가츠동", "마파두부", "굴국", "소보로 덮밥", "간장 등갈비", "간장 오징어 볶음", "우삼겹 솥밥", "비빔국수", "브리또", "토마토 홍합찜", "연어 샌드위치"];
 
             let specialInstruction = '';
             if (inputs.cuisine.includes('쩜오특선')) {
-                const specialMenuList = jjeomOSpecialMenu.join(', ');
-                specialInstruction = `\n- **특별 메뉴:** 다음은 우리 가족이 특히 좋아하는 메뉴 목록입니다. 생성되는 전체 식단에 이 메뉴들을 약 10~20% 비율로 자연스럽게 섞어서 포함시켜 주세요: [${specialMenuList}]`;
+                specialInstruction = `\n- **특별 메뉴:** 다음은 우리 가족이 특히 좋아하는 메뉴 목록입니다. 생성되는 전체 식단에 이 메뉴들을 약 10~20% 비율로 자연스럽게 섞어서 포함시켜 주세요: [${jjeomOSpecialMenu.join(', ')}]`;
             }
             
             let worldCuisineInstruction = '';
@@ -469,13 +463,9 @@
                 worldCuisineInstruction = `\n- **특별 요청:** 식단에 제3세계 요리(예: 아프리카, 남미, 중동 등)를 약 5% 비율로 포함시켜 주세요.`;
             }
 
-            const finalCuisine = inputs.cuisine
-                .replace(/, 쩜오특선|쩜오특선, |쩜오특선/g, '')
-                .replace(/, 제3세계 요리|제3세계 요리, |제3세계 요리/g, '')
-                .trim() || '상관 없음';
+            const finalCuisine = inputs.cuisine.replace(/, 쩜오특선|쩜오특선, |쩜오특선/g, '').replace(/, 제3세계 요리|제3세계 요리, |제3세계 요리/g, '').trim() || '상관 없음';
 
-            let prompt = `당신은 전문 영양사이자 요리사입니다. 아래의 조건에 맞춰 식단을 생성해주세요.
-
+            return `당신은 전문 영양사이자 요리사입니다. 아래의 조건에 맞춰 식단을 생성해주세요.
             **식단 조건:**
             - **기간:** ${inputs.days}일
             - **대상:** 어른 ${inputs.adults}명, 아이 ${inputs.children}명
@@ -487,42 +477,23 @@
             ${worldCuisineInstruction}
             - 점심과 저녁 메뉴는 서로 겹치지 않게, 그리고 전날 메뉴와도 최대한 겹치지 않게 다양하게 구성해주세요.
             - 반드시 한국어로 대답해주세요.
-
             **출력 형식:**
             당신의 응답은 반드시 JSON 형식이어야 합니다. JSON 배열 앞뒤로 어떠한 설명이나 Markdown 형식 ('''json)도 절대 추가하지 마세요. 당신의 전체 응답이 '[' 문자로 시작해서 ']' 문자로 끝나야 합니다.
             - 'day', 'breakfast', 'lunch', 'dinner' 키를 가진 객체들의 배열(Array) 형태로 출력해주세요.
             - 하루 2끼 식단일 경우, 'lunch' 값은 "—" (하이픈)으로 표시해주세요.
-
             **JSON 출력 예시:**
-            [
-              {
-                "day": 1,
-                "breakfast": "현미밥과 미역국",
-                "lunch": "소불고기 덮밥",
-                "dinner": "고등어 구이와 쌈채소"
-              }
-            ]
-            `;
-            return prompt;
+            [{"day": 1, "breakfast": "현미밥과 미역국", "lunch": "소불고기 덮밥", "dinner": "고등어 구이와 쌈채소"}]`;
         }
 
         async function callGeminiAPI(prompt, apiKey, inputs) {
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-            
-            const payload = {
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                    responseMimeType: "application/json",
-                }
-            };
+            const payload = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json" } };
 
             const fetchWithRetry = async (url, options, retries = 3, delay = 1000) => {
                 for (let i = 0; i < retries; i++) {
                     try {
                         const response = await fetch(url, options);
-                        if (response.status === 503 || response.status === 429) {
-                           throw new Error('Model is overloaded. Retrying...');
-                        }
+                        if (response.status === 503 || response.status === 429) throw new Error('Model is overloaded. Retrying...');
                         if (!response.ok) {
                             const errorData = await response.json();
                             throw new Error(errorData.error.message || `HTTP error! status: ${response.status}`);
@@ -533,45 +504,23 @@
                             console.log(`Attempt ${i + 1} failed: ${error.message}. Retrying in ${delay / 1000}s...`);
                             await new Promise(resolve => setTimeout(resolve, delay));
                             delay *= 2; 
-                        } else {
-                            throw error; 
-                        }
+                        } else throw error;
                     }
                 }
             };
 
             try {
-                const response = await fetchWithRetry(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                
+                const response = await fetchWithRetry(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 const result = await response.json();
                 const rawText = result.candidates[0].content.parts[0].text;
-                
                 const jsonMatch = rawText.match(/(\[[\s\S]*\])/);
-                if (!jsonMatch) {
-                    throw new Error("AI 응답에서 유효한 식단표(JSON)를 찾을 수 없습니다.");
-                }
-                const cleanedText = jsonMatch[1];
-
-                const plan = JSON.parse(cleanedText);
-                displayPlan(plan, inputs.mealFreq, inputs.days);
-
+                if (!jsonMatch) throw new Error("AI 응답에서 유효한 식단표(JSON)를 찾을 수 없습니다.");
+                currentPlan = JSON.parse(jsonMatch[1]);
+                displayPlan(currentPlan, inputs.mealFreq, inputs.days);
             } catch (error) {
                 console.error("Error calling Gemini API:", error);
                 loadingSpinner.classList.add('hidden');
-                outputDiv.innerHTML = `<div class="text-center p-8 text-red-600 bg-red-50 rounded-lg">
-                    <h3 class="font-bold text-lg mb-2">AI 호출 오류!</h3>
-                    <p>식단을 생성하는 데 실패했습니다. 아래 내용을 확인해주세요.</p>
-                    <ul class="text-sm mt-2 text-left list-disc list-inside">
-                        <li>AI 모델이 일시적으로 과부하 상태일 수 있습니다. 잠시 후 다시 시도해주세요.</li>
-                        <li>입력한 API 키가 정확한지 확인해주세요.</li>
-                        <li>네트워크 연결 상태를 확인해주세요.</li>
-                    </ul>
-                    <p class="mt-4 text-xs">${error.message}</p>
-                 </div>`;
+                outputDiv.innerHTML = `<div class="text-center p-8 text-red-600 bg-red-50 rounded-lg"><h3 class="font-bold text-lg mb-2">AI 호출 오류!</h3><p>식단을 생성하는 데 실패했습니다. 아래 내용을 확인해주세요.</p><ul class="text-sm mt-2 text-left list-disc list-inside"><li>AI 모델이 일시적으로 과부하 상태일 수 있습니다. 잠시 후 다시 시도해주세요.</li><li>입력한 API 키가 정확한지 확인해주세요.</li><li>네트워크 연결 상태를 확인해주세요.</li></ul><p class="mt-4 text-xs">${error.message}</p></div>`;
             } finally {
                 setButtonsDisabled(false);
             }
@@ -579,69 +528,92 @@
 
         function displayPlan(plan, mealFreq, numberOfDays) {
             loadingSpinner.classList.add('hidden');
-            
             const startDate = new Date();
-            if (numberOfDays > 1) {
-                startDate.setDate(startDate.getDate() + 1); // Start from tomorrow for week/month plans
-            }
+            if (numberOfDays > 1) startDate.setDate(startDate.getDate() + 1);
 
-            if (numberOfDays === 1) {
-                resultTitle.textContent = "✨ 오늘의 추천 메뉴";
-            } else {
-                resultTitle.textContent = `📝 ${numberOfDays}일 식단 계획`;
-            }
+            if (numberOfDays === 1) resultTitle.textContent = "✨ 오늘의 추천 메뉴";
+            else resultTitle.textContent = `📝 ${numberOfDays}일 식단 계획`;
             
-            let tableHTML = `
-                <table class="w-full text-sm text-left text-slate-500">
-                    <thead class="text-xs text-slate-700 bg-slate-100 rounded-t-lg">
-                        <tr>
-                            <th scope="col" class="py-3 px-4 w-2/12 text-center rounded-tl-lg">일자</th>
-                            <th scope="col" class="py-3 px-4 w-3/12">아침</th>
-                            ${mealFreq === '3' ? '<th scope="col" class="py-3 px-4 w-4/12">점심</th>' : ''}
-                            <th scope="col" class="py-3 px-4 w-3/12 rounded-tr-lg">저녁</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
+            let tableHTML = `<table class="w-full text-sm text-left text-slate-500"><thead class="text-xs text-slate-700 bg-slate-100 rounded-t-lg"><tr><th scope="col" class="py-3 px-4 w-2/12 text-center rounded-tl-lg">일자</th><th scope="col" class="py-3 px-4 w-3/12">아침</th>${mealFreq === '3' ? '<th scope="col" class="py-3 px-4 w-4/12">점심</th>' : ''}<th scope="col" class="py-3 px-4 w-3/12 rounded-tr-lg">저녁</th></tr></thead><tbody>`;
             
             const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
-
             plan.forEach((dayData, index) => {
                 const currentDate = new Date(startDate);
                 currentDate.setDate(startDate.getDate() + index);
-
-                const month = currentDate.getMonth() + 1;
-                const day = currentDate.getDate();
-                const weekDay = weekdays[currentDate.getDay()];
+                const month = currentDate.getMonth() + 1, day = currentDate.getDate(), weekDay = weekdays[currentDate.getDay()];
                 
                 let dayClass = 'bg-white';
                 if (weekDay === '토') dayClass = 'bg-sky-50';
                 if (weekDay === '일') dayClass = 'bg-rose-50';
-
                 let dateCellContent = `${month}/${day}`;
                 if (numberOfDays === 1) {
                     dateCellContent = '오늘';
                     dayClass = 'bg-amber-50';
                 }
 
-                tableHTML += `
-                    <tr class="${dayClass} border-b border-slate-200">
-                        <td class="py-4 px-4 font-bold text-slate-900 text-center">
-                            ${dateCellContent}
-                            <span class="block text-xs font-normal text-slate-500">${weekDay}</span>
-                        </td>
-                        <td class="py-4 px-4">${dayData.breakfast}</td>
-                        ${mealFreq === '3' ? `<td class="py-4 px-4">${dayData.lunch}</td>` : ''}
-                        <td class="py-4 px-4">${dayData.dinner}</td>
-                    </tr>
-                `;
+                tableHTML += `<tr class="${dayClass} border-b border-slate-200" data-day-index="${index}"><td class="py-4 px-4 font-bold text-slate-900 text-center">${dateCellContent}<span class="block text-xs font-normal text-slate-500">${weekDay}</span></td>
+                <td class="py-4 px-4 meal-cell relative"><span class="meal-text">${dayData.breakfast}</span><button class="regenerate-btn" data-meal-type="breakfast"><svg class="w-4 h-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6"/><path d="M22 11.5A10 10 0 0 0 3.5 12.5"/><path d="M2 12.5a10 10 0 0 0 18.5-1"/></svg></button></td>
+                ${mealFreq === '3' ? `<td class="py-4 px-4 meal-cell relative"><span class="meal-text">${dayData.lunch}</span><button class="regenerate-btn" data-meal-type="lunch"><svg class="w-4 h-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6"/><path d="M22 11.5A10 10 0 0 0 3.5 12.5"/><path d="M2 12.5a10 10 0 0 0 18.5-1"/></svg></button></td>` : ''}
+                <td class="py-4 px-4 meal-cell relative"><span class="meal-text">${dayData.dinner}</span><button class="regenerate-btn" data-meal-type="dinner"><svg class="w-4 h-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M2.5 22v-6h6"/><path d="M22 11.5A10 10 0 0 0 3.5 12.5"/><path d="M2 12.5a10 10 0 0 0 18.5-1"/></svg></button></td></tr>`;
             });
-
             tableHTML += `</tbody></table>`;
             outputDiv.innerHTML = tableHTML;
             actionButtons.classList.remove('hidden');
         }
         
+        async function handleRegenerateClick(event) {
+            const target = event.target.closest('.regenerate-btn');
+            if (!target) return;
+
+            target.disabled = true;
+            target.classList.add('loading');
+
+            const cell = target.closest('td');
+            const row = target.closest('tr');
+            const dayIndex = parseInt(row.dataset.dayIndex);
+            const mealType = target.dataset.mealType;
+            const originalMeal = cell.querySelector('.meal-text').textContent;
+            
+            const mealTypeKorean = { breakfast: '아침', lunch: '점심', dinner: '저녁' }[mealType];
+            const { healthGoal, cuisine } = currentUserInputs;
+
+            const prompt = `'${originalMeal}' 메뉴를 대체할만한 다른 ${mealTypeKorean} 메뉴를 하나만 추천해줘.
+            - 기존 메뉴와 비슷한 종류이면서도 새로운 메뉴여야 해.
+            - 현재 식단의 주요 목표는 '${healthGoal}'이고, 선호 음식은 '${cuisine}'이야. 이걸 참고해서 추천해줘.
+            - 다른 설명이나 부가적인 텍스트는 절대 추가하지 말고, 오직 추천하는 음식 이름만 일반 텍스트로 응답해줘.`;
+
+            const apiKey = apiKeyInput.value.trim();
+
+            try {
+                const newMeal = await callGeminiForSingleMeal(prompt, apiKey);
+                cell.querySelector('.meal-text').textContent = newMeal;
+                currentPlan[dayIndex][mealType] = newMeal;
+            } catch (error) {
+                showCustomMessage('메뉴 변경에 실패했습니다.');
+                console.error("Regeneration failed:", error);
+            } finally {
+                target.disabled = false;
+                target.classList.remove('loading');
+            }
+        }
+
+        async function callGeminiForSingleMeal(prompt, apiKey) {
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            const payload = { contents: [{ parts: [{ text: prompt }] }] };
+
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error.message || `HTTP error! status: ${response.status}`);
+            }
+            const result = await response.json();
+            if (result.candidates && result.candidates[0].content.parts[0].text) {
+                return result.candidates[0].content.parts[0].text.trim();
+            } else {
+                throw new Error("Invalid response from AI.");
+            }
+        }
+
         function showCustomMessage(message) {
             const messageBox = document.createElement('div');
             messageBox.style.position = 'fixed';
@@ -657,18 +629,11 @@
             messageBox.style.opacity = '0';
             messageBox.style.transition = 'opacity 0.3s ease-in-out';
             messageBox.textContent = message;
-
             document.body.appendChild(messageBox);
-
-            setTimeout(() => {
-                messageBox.style.opacity = '1';
-            }, 10);
-            
+            setTimeout(() => { messageBox.style.opacity = '1'; }, 10);
             setTimeout(() => {
                 messageBox.style.opacity = '0';
-                setTimeout(() => {
-                    document.body.removeChild(messageBox);
-                }, 300);
+                setTimeout(() => { document.body.removeChild(messageBox); }, 300);
             }, 3000);
         }
     </script>
